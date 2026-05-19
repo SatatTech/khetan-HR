@@ -5,6 +5,7 @@
 import frappe
 from frappe import _
 from frappe.model.document import Document
+from hrms.hr.doctype.employee_checkin.employee_checkin import EmployeeCheckin as HRMSEmployeeCheckin
 from frappe.utils import cint, get_datetime
 
 from hrms.hr.doctype.shift_assignment.shift_assignment import (
@@ -13,7 +14,7 @@ from hrms.hr.doctype.shift_assignment.shift_assignment import (
 from hrms.hr.utils import validate_active_employee
 
 
-class EmployeeCheckin(Document):
+class EmployeeCheckin(HRMSEmployeeCheckin):
 	def validate(self):
 		validate_active_employee(self.employee)
 		self.validate_duplicate_log()

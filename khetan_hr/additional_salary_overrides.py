@@ -5,12 +5,13 @@
 import frappe
 from frappe import _, bold
 from frappe.model.document import Document
+from hrms.payroll.doctype.additional_salary.additional_salary import AdditionalSalary as HRMSAdditionalSalary
 from frappe.utils import comma_and, date_diff, formatdate, get_link_to_form, getdate
 
 from hrms.hr.utils import validate_active_employee
 
 
-class AdditionalSalary(Document):
+class AdditionalSalary(HRMSAdditionalSalary):
 	def on_submit(self):
 		self.update_return_amount_in_employee_advance()
 		self.update_employee_referral()

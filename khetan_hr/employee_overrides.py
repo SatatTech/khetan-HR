@@ -12,7 +12,7 @@ from frappe.permissions import (
 from frappe.utils import cstr, getdate, today, validate_email_address
 from frappe.utils.data import now
 from frappe.utils.nestedset import NestedSet
-from erpnext.setup.doctype.employee.employee import Employee as HRMSEmployee
+from hrms.overrides.employee_master import EmployeeMaster as HRMSEmployee
 
 from erpnext.utilities.transaction_base import delete_events
 

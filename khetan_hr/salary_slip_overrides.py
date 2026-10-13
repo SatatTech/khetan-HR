@@ -32,6 +32,7 @@ from erpnext.accounts.utils import get_fiscal_year
 from erpnext.setup.doctype.employee.employee import get_holiday_list_for_employee
 from erpnext.utilities.transaction_base import TransactionBase
 from hrms.payroll.doctype.salary_slip.salary_slip import SalarySlip as HRMSSalarySlip
+from hrms.payroll.doctype.salary_slip.salary_slip import verify_lwp_days_corrected
 
 from hrms.hr.utils import validate_active_employee
 from hrms.payroll.doctype.additional_salary.additional_salary import get_additional_salaries
@@ -403,7 +404,7 @@ class SalarySlip(HRMSSalarySlip):
 
 		make_salary_slip(self._salary_structure_doc.name, self)
 
-	def get_working_days_details(self, lwp=None, for_preview=0):
+	def get_working_days_details(self, lwp=None, for_preview=0, lwp_days_corrected=None):
 		payroll_settings = frappe.get_cached_value(
 			"Payroll Settings",
 			None,
@@ -486,6 +487,10 @@ class SalarySlip(HRMSSalarySlip):
 				self.payment_days -= unmarked_days
 		else:
 			self.payment_days = 0
+
+		if lwp_days_corrected and lwp_days_corrected > 0:
+			if verify_lwp_days_corrected(self.employee, self.start_date, self.end_date, lwp_days_corrected):
+				self.payment_days += lwp_days_corrected
 
 	def get_unmarked_days(
 		self, include_holidays_in_total_working_days: bool, holidays: list | None = None
@@ -1657,7 +1662,10 @@ class SalarySlip(HRMSSalarySlip):
 
 	def get_amount_based_on_payment_days(self, row):
 		amount, additional_amount = row.amount, row.additional_amount
-		timesheet_component = self._salary_structure_doc.salary_component
+		if not getattr(self, "_salary_structure_doc", None) and self.salary_structure:
+			self._salary_structure_doc = frappe.get_cached_doc("Salary Structure", self.salary_structure)
+		structure_doc = getattr(self, "_salary_structure_doc", None)
+		timesheet_component = structure_doc.salary_component if structure_doc else None
 
 		if (
 			self.salary_structure
@@ -1766,7 +1774,7 @@ class SalarySlip(HRMSSalarySlip):
 					"company": self.company,
 					"docstatus": 1,
 				},
-				fields="SUM(amount) as total_amount",
+				fields=[{"SUM": "amount", "as": "total_amount"}],
 			)[0].total_amount
 			or 0.0
 		)
@@ -1836,12 +1844,12 @@ class SalarySlip(HRMSSalarySlip):
 			status = self.get_status()
 		self.db_set("status", status)
 
-	def process_salary_structure(self, for_preview=0):
+	def process_salary_structure(self, for_preview=0, lwp_days_corrected=None):
 		"""Calculate salary after salary structure details have been updated"""
 		if not self.salary_slip_based_on_timesheet:
 			self.get_date_details()
 		self.pull_emp_details()
-		self.get_working_days_details(for_preview=for_preview)
+		self.get_working_days_details(for_preview=for_preview, lwp_days_corrected=lwp_days_corrected)
 		self.calculate_net_pay()
 
 	def pull_emp_details(self):
@@ -1910,7 +1918,7 @@ class SalarySlip(HRMSSalarySlip):
 
 		salary_slip_sum = frappe.get_list(
 			"Salary Slip",
-			fields=["sum(net_pay) as net_sum", "sum(gross_pay) as gross_sum"],
+			fields=[{"SUM": "net_pay", "as": "net_sum"}, {"SUM": "gross_pay", "as": "gross_sum"}],
 			filters={
 				"employee": self.employee,
 				"start_date": [">=", period_start_date],
@@ -1933,7 +1941,7 @@ class SalarySlip(HRMSSalarySlip):
 		first_day_of_the_month = get_first_day(self.start_date)
 		salary_slip_sum = frappe.get_list(
 			"Salary Slip",
-			fields=["sum(net_pay) as sum"],
+			fields=[{"SUM": "net_pay", "as": "sum"}],
 			filters={
 				"employee": self.employee,
 				"start_date": [">=", first_day_of_the_month],
